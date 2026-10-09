@@ -1,18 +1,17 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/lib/prisma";
 import { Users, Search, Mail, Phone, Award } from "lucide-react";
 
 export default async function RefereesPage() {
-  let referees: any[] = [];
-
-  try {
-    referees = await prisma.referee.findMany({
-      include: {
-        user: true,
-      },
-    });
-  } catch (err) {
-    console.error("Error loading referees:", err);
-  }
+  const referees = await prisma.referee.findMany({
+    include: {
+      user: true,
+    },
+    orderBy: {
+      lastName: "asc",
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -48,46 +47,54 @@ export default async function RefereesPage() {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-950/60 text-slate-400 uppercase border-b border-slate-800 font-semibold">
-                <th className="py-3 px-4">Referee ID</th>
-                <th className="py-3 px-4">Email</th>
-                <th className="py-3 px-4">Phone</th>
-                <th className="py-3 px-4">Account Status</th>
+                <th className="py-3 px-4">Referee Code</th>
+                <th className="py-3 px-4">Full Name</th>
+                <th className="py-3 px-4">FIBA License / Rank</th>
+                <th className="py-3 px-4">Contact</th>
+                <th className="py-3 px-4">Experience</th>
+                <th className="py-3 px-4">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 text-slate-300">
               {referees.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-500">
-                    No referee records found in database.
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                    No referee records found in MySQL database.
                   </td>
                 </tr>
               ) : (
-                referees.map((item: any) => (
-                  <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
+                referees.map((ref) => (
+                  <tr key={ref.id} className="hover:bg-slate-800/40 transition-colors">
                     <td className="py-3 px-4 font-mono font-bold text-amber-400">
-                      {item.refereeCode || item.id.substring(0, 8)}
+                      {ref.refereeCode}
                     </td>
-                    <td className="py-3 px-4 font-medium text-white">
+                    <td className="py-3 px-4 font-semibold text-white">
+                      {ref.firstName} {ref.lastName}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 text-slate-200 border border-slate-700 font-medium">
+                        <Award className="w-3.5 h-3.5 text-amber-500" />
+                        {ref.licenseType}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 space-y-0.5 text-[11px] text-slate-400">
                       <div className="flex items-center gap-1">
-                        <Mail className="w-3.5 h-3.5 text-slate-500" />
-                        {item.user?.email || "N/A"}
+                        <Mail className="w-3 h-3 text-slate-500" /> {ref.user?.email || "N/A"}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-slate-500" /> {ref.phoneNumber || "N/A"}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-slate-400">
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3.5 h-3.5 text-slate-500" />
-                        {item.phone || item.phoneNumber || "N/A"}
-                      </div>
-                    </td>
+                    <td className="py-3 px-4 font-medium">{ref.yearsExperience} Years</td>
                     <td className="py-3 px-4">
                       <span
                         className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                          (item.status || item.user?.status) === "ACTIVE"
+                          ref.status === "ACTIVE"
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                             : "bg-red-500/10 text-red-400 border-red-500/20"
                         }`}
                       >
-                        {item.status || item.user?.status || "ACTIVE"}
+                        {ref.status}
                       </span>
                     </td>
                   </tr>
