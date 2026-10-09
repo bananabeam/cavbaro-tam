@@ -1,0 +1,472 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  TREASURER
+  ASSIGNOR
+  REFEREE
+  TABLE_OFFICIAL
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum RefereeClassification {
+  FIBA_LICENSED
+  NATIONAL_LEVEL
+  REGIONAL_SENIOR
+  REGIONAL_JUNIOR
+  CANDIDATE
+}
+
+enum CertificationStatus {
+  VALID
+  EXPIRING_SOON
+  EXPIRED
+}
+
+enum GameCategory {
+  ELEMENTARY
+  JUNIOR_HIGH
+  SENIOR_HIGH
+  U18
+  U21
+  U25
+  OPEN
+  VETERANS
+  THREE_ON_THREE
+  CORPORATE
+  INTER_BARANGAY
+  MUNICIPAL
+  PROVINCIAL
+}
+
+enum GameStatus {
+  SCHEDULED
+  ASSIGNED
+  ONGOING
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+enum AssignmentRole {
+  REFEREE_HEAD
+  REFEREE_1
+  REFEREE_2
+  REFEREE_ALTERNATE
+  TABLE_SCORER
+  TABLE_TIMER
+  SHOT_CLOCK_OPERATOR
+}
+
+enum PaymentStatus {
+  UNPAID
+  PROCESSING
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  GCASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  PAID
+  REJECTED
+}
+
+enum ApplicationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum DocVisibility {
+  PUBLIC
+  MEMBERS_ONLY
+  ADMIN_ONLY
+}
+
+enum AnnouncementCategory {
+  GENERAL
+  TRAINING
+  MEETING
+  LEAGUE_UPDATE
+  ASSIGNMENT_NOTICE
+  POLICY
+}
+
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  passwordHash  String     @map("password_hash")
+  role          Role       @default(REFEREE)
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  refereeProfile          Referee?
+  officerProfile          Officer?
+  auditLogs               AuditLog[]
+  createdAnnouncements    Announcement[]
+  processedApplications   Application[]   @relation("ReviewedByAdmin")
+
+  @@map("users")
+}
+
+model Referee {
+  id                  String                @id @default(uuid())
+  userId              String                @unique @map("user_id")
+  refereeIdNumber     String                @unique @map("referee_id_number")
+  firstName           String                @map("first_name")
+  lastName            String                @map("last_name")
+  phone               String
+  photoUrl            String?               @map("photo_url")
+  classification      RefereeClassification @default(CANDIDATE)
+  yearsExperience     Int                   @default(0) @map("years_experience")
+  specialization      String?
+  isTableOfficial     Boolean               @default(false) @map("is_table_official")
+  emergencyContact    String?               @map("emergency_contact")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  certifications      RefereeCertification[]
+  gameAssignments     GameAssignment[]
+  earnings            Earning[]
+  withdrawals         WithdrawalRequest[]
+  evaluations         PerformanceEvaluation[]
+
+  @@index([refereeIdNumber])
+  @@map("referees")
+}
+
+model RefereeCertification {
+  id                 String              @id @default(uuid())
+  refereeId          String              @map("referee_id")
+  certificationName  String              @map("certification_name")
+  issuingOrg         String              @map("issuing_org")
+  certificateNumber  String?             @map("certificate_number")
+  dateIssued         DateTime            @map("date_issued")
+  expirationDate     DateTime?           @map("expiration_date")
+  status             CertificationStatus @default(VALID)
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  referee            Referee             @relation(fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@index([refereeId])
+  @@map("referee_certifications")
+}
+
+model Officer {
+  id             String    @id @default(uuid())
+  userId         String?   @unique @map("user_id")
+  name           String
+  position       String
+  bio            String?   @db.Text
+  photoUrl       String?   @map("photo_url")
+  displayOrder   Int       @default(0) @map("display_order")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("officers")
+}
+
+model League {
+  id                  String           @id @default(uuid())
+  name                String
+  organizer           String
+  season              String
+  category            GameCategory     @default(OPEN)
+  location            String
+  defaultGameFee      Decimal          @default(500.00) @db.Decimal(10, 2) @map("default_game_fee")
+  deductionPercentage Decimal          @default(10.00) @db.Decimal(5, 2) @map("deduction_percentage")
+  isActive            Boolean          @default(true) @map("is_active")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  teams               Team[]
+  games               Game[]
+  deductionConfigs    DeductionConfig[]
+
+  @@map("leagues")
+}
+
+model DeductionConfig {
+  id                 String    @id @default(uuid())
+  leagueId           String?   @map("league_id")
+  name               String
+  percentage         Decimal   @default(0.00) @db.Decimal(5, 2)
+  fixedAmount        Decimal   @default(0.00) @db.Decimal(10, 2) @map("fixed_amount")
+  isActive           Boolean   @default(true) @map("is_active")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  league             League?   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@map("deduction_configs")
+}
+
+model Team {
+  id             String    @id @default(uuid())
+  leagueId       String    @map("league_id")
+  name           String
+  shortName      String?   @map("short_name")
+  logoUrl        String?   @map("logo_url")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  league         League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  homeGames      Game[]    @relation("TeamA")
+  awayGames      Game[]    @relation("TeamB")
+
+  @@map("teams")
+}
+
+model Venue {
+  id             String    @id @default(uuid())
+  name           String
+  address        String
+  city           String
+  contactPerson  String?   @map("contact_person")
+  contactPhone   String?   @map("contact_phone")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  games          Game[]
+
+  @@map("venues")
+}
+
+model Game {
+  id             String          @id @default(uuid())
+  gameNumber     String          @unique @map("game_number")
+  leagueId       String          @map("league_id")
+  venueId        String          @map("venue_id")
+  teamAId        String          @map("team_a_id")
+  teamBId        String          @map("team_b_id")
+  gameDate       DateTime        @map("game_date")
+  startTime      DateTime        @map("start_time")
+  endTime        DateTime        @map("end_time")
+  category       GameCategory    @default(OPEN)
+  customFee      Decimal?        @db.Decimal(10, 2) @map("custom_fee")
+  status         GameStatus      @default(SCHEDULED)
+  remarks        String?         @db.Text
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  league         League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  venue          Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  teamA          Team            @relation("TeamA", fields: [teamAId], references: [id], onDelete: Cascade)
+  teamB          Team            @relation("TeamB", fields: [teamBId], references: [id], onDelete: Cascade)
+  assignments    GameAssignment[]
+  earnings       Earning[]
+
+  @@index([gameDate])
+  @@map("games")
+}
+
+model GameAssignment {
+  id             String         @id @default(uuid())
+  gameId         String         @map("game_id")
+  refereeId      String         @map("referee_id")
+  role           AssignmentRole @default(REFEREE_1)
+  isConfirmed    Boolean        @default(false) @map("is_confirmed")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  game           Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  referee        Referee        @relation(fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, refereeId])
+  @@index([refereeId])
+  @@map("game_assignments")
+}
+
+model Earning {
+  id             String        @id @default(uuid())
+  refereeId      String        @map("referee_id")
+  gameId         String        @map("game_id")
+  paymentId      String?       @map("payment_id")
+  grossFee       Decimal       @db.Decimal(10, 2) @map("gross_fee")
+  deduction      Decimal       @db.Decimal(10, 2) @default(0.00)
+  netEarning     Decimal       @db.Decimal(10, 2) @map("net_earning")
+  status         PaymentStatus @default(UNPAID)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  referee        Referee       @relation(fields: [refereeId], references: [id], onDelete: Cascade)
+  game           Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  payment        Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([refereeId])
+  @@index([status])
+  @@map("earnings")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  referenceNo    String        @unique @map("reference_no")
+  totalAmount    Decimal       @db.Decimal(10, 2) @map("total_amount")
+  method         PaymentMethod @default(GCASH)
+  paidAt         DateTime      @default(now()) @map("paid_at")
+  notes          String?       @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  earnings       Earning[]
+
+  @@map("payments")
+}
+
+model WithdrawalRequest {
+  id             String           @id @default(uuid())
+  refereeId      String           @map("referee_id")
+  amount         Decimal          @db.Decimal(10, 2)
+  method         PaymentMethod    @default(GCASH)
+  accountName    String           @map("account_name")
+  accountNumber  String           @map("account_number")
+  status         WithdrawalStatus @default(PENDING)
+  notes          String?          @db.Text
+  processedAt    DateTime?        @map("processed_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  referee        Referee          @relation(fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@index([refereeId])
+  @@index([status])
+  @@map("withdrawal_requests")
+}
+
+model PerformanceEvaluation {
+  id             String   @id @default(uuid())
+  refereeId      String   @map("referee_id")
+  evaluatorName  String   @map("evaluator_name")
+  ruleKnowledge  Int      @default(5) @map("rule_knowledge")
+  positioning    Int      @default(5)
+  fitness        Int      @default(5)
+  punctuality    Int      @default(5)
+  conduct        Int      @default(5)
+  overallScore   Decimal  @db.Decimal(3, 1) @map("overall_score")
+  remarks        String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  referee        Referee  @relation(fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@index([refereeId])
+  @@map("performance_evaluations")
+}
+
+model Announcement {
+  id             String               @id @default(uuid())
+  authorId       String               @map("author_id")
+  title          String
+  slug           String               @unique
+  content        String               @db.Text
+  featuredImage  String?              @map("featured_image")
+  category       AnnouncementCategory @default(GENERAL)
+  isPublished    Boolean              @default(true) @map("is_published")
+  publishedAt    DateTime             @default(now()) @map("published_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  author         User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("announcements")
+}
+
+model Application {
+  id                  String            @id @default(uuid())
+  fullName            String            @map("full_name")
+  email               String
+  phone               String
+  dateOfBirth         DateTime          @map("date_of_birth")
+  address             String
+  basketballExp       String            @db.Text @map("basketball_exp")
+  refereeExp          String            @db.Text @map("referee_exp")
+  certifications      String?           @db.Text
+  yearsOfficiating    Int               @default(0) @map("years_officiating")
+  preferredLocation   String            @map("preferred_location")
+  emergencyContact    String            @map("emergency_contact")
+  status              ApplicationStatus @default(PENDING)
+  reviewedByUserId    String?           @map("reviewed_by_user_id")
+  reviewNotes         String?           @db.Text @map("review_notes")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  reviewedBy          User?             @relation("ReviewedByAdmin", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("applications")
+}
+
+model Document {
+  id             String        @id @default(uuid())
+  title          String
+  description    String?       @db.Text
+  fileUrl        String        @map("file_url")
+  fileType       String        @map("file_type")
+  visibility     DocVisibility @default(PUBLIC)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@map("documents")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  userId         String?  @map("user_id")
+  action         String
+  module         String
+  details        String?  @db.Text
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model OrganizationSettings {
+  id                  String   @id @default("default")
+  orgName             String   @default("CAVBARO TAM") @map("org_name")
+  tagline             String   @default("Integrity on Every Call. Excellence on Every Court.")
+  email               String   @default("info@cavbarotam.ph")
+  phone               String   @default("+63 917 123 4567")
+  address             String   @default("Metro Manila, Philippines")
+  facebookUrl         String?  @default("https://facebook.com/cavbarotam") @map("facebook_url")
+  defaultRefereeFee   Decimal  @default(500.00) @db.Decimal(10, 2) @map("default_referee_fee")
+  defaultDeductionPct Decimal  @default(10.00) @db.Decimal(5, 2) @map("default_deduction_pct")
+  currency            String   @default("PHP")
+  timezone            String   @default("Asia/Manila")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("organization_settings")
+}
