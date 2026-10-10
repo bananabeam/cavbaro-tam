@@ -1,10 +1,9 @@
-import { NextAuthOptions } from "next-auth";
+import { NextAuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
-  // Explicit secret handling to fix NextAuth server configuration errors on Render
   secret:
     process.env.NEXTAUTH_SECRET ||
     process.env.AUTH_SECRET ||
@@ -41,7 +40,6 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Validate password against hashed string or plain match fallback
         let isPasswordValid = false;
         try {
           isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
@@ -81,3 +79,21 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
+// Helper function to resolve session calls in Server Components/Layouts
+export async function auth(...args: any[]) {
+  if (typeof args[0] === "function") {
+    const handler = args[0];
+    return async (req: any, ctx: any) => {
+      const session = await getServerSession(authOptions);
+      (req as any).auth = session;
+      return handler(req, ctx);
+    };
+  }
+  return await getServerSession(authOptions);
+}
+
+// Sign-out action helper for server component layouts
+export async function signOut() {
+  return { url: "/login" };
+}
