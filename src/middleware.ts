@@ -1,9 +1,7 @@
-import { withAuth } from "next-auth/middleware";
+import { auth } from "@/auth";
 
-export default withAuth({
-  pages: {
-    signIn: "/login",
-  },
+export default auth(() => {
+  // Protects routes under /dashboard
 });
 
 export const config = {

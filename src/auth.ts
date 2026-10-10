@@ -1,13 +1,12 @@
-import { NextAuthOptions } from "next-auth";
-import { getServerSession } from "next-auth/next";
-import CredentialsProvider from "next-auth/providers/credentials";
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
-export const authOptions: NextAuthOptions = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
   secret:
-    process.env.NEXTAUTH_SECRET ||
     process.env.AUTH_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
     "cavbaro_tam_secret_key_2026_super_secure",
 
   session: {
@@ -20,7 +19,7 @@ export const authOptions: NextAuthOptions = {
   },
 
   providers: [
-    CredentialsProvider({
+    Credentials({
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
@@ -31,10 +30,11 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        const email = (credentials.email as string).toLowerCase().trim();
+        const password = credentials.password as string;
+
         const user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email.toLowerCase().trim(),
-          },
+          where: { email },
         });
 
         if (!user || !user.passwordHash) {
@@ -43,10 +43,10 @@ export const authOptions: NextAuthOptions = {
 
         let isPasswordValid = false;
         try {
-          isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
+          isPasswordValid = await bcrypt.compare(password, user.passwordHash);
         } catch {
           // Fallback check if seed password was stored unhashed
-          isPasswordValid = credentials.password === user.passwordHash;
+          isPasswordValid = password === user.passwordHash;
         }
 
         if (!isPasswordValid) {
@@ -79,14 +79,4 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-};
-
-// Server component helper that uses getServerSession imported from next-auth/next
-export async function auth() {
-  return await getServerSession(authOptions);
-}
-
-// Sign-out helper for layout server actions
-export async function signOut() {
-  return { url: "/login" };
-}
+});
