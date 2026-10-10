@@ -1,4 +1,5 @@
-import { NextAuthOptions, getServerSession } from "next-auth";
+import { NextAuthOptions } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -80,20 +81,12 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-// Helper function to resolve session calls in Server Components/Layouts
-export async function auth(...args: any[]) {
-  if (typeof args[0] === "function") {
-    const handler = args[0];
-    return async (req: any, ctx: any) => {
-      const session = await getServerSession(authOptions);
-      (req as any).auth = session;
-      return handler(req, ctx);
-    };
-  }
+// Server component helper that uses getServerSession imported from next-auth/next
+export async function auth() {
   return await getServerSession(authOptions);
 }
 
-// Sign-out action helper for server component layouts
+// Sign-out helper for layout server actions
 export async function signOut() {
   return { url: "/login" };
 }
