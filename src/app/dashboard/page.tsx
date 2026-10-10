@@ -10,11 +10,16 @@ async function DashboardStats() {
 
   try {
     refereeCount = await prisma.referee.count();
+    
+    // Corrected query: status exists on the nested user relation
     activeRefereeCount = await prisma.referee.count({
       where: {
-        status: "ACTIVE",
+        user: {
+          status: "ACTIVE",
+        },
       },
     });
+    
     userCount = await prisma.user.count();
   } catch (error) {
     console.error("Dashboard metrics database query error:", error);
